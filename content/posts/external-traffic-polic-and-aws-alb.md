@@ -1,7 +1,7 @@
 +++
 title = 'Kubernetes Service External Traffic Policy and AWS ALB'
 date = 2024-04-11T16:09:02+02:00
-draft = true
+draft = false
 toc = true
 
 +++

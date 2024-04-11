@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="en-us">
+  <head><script src="/livereload.js?mindelay=10&amp;v=2&amp;port=1313&amp;path=livereload" data-no-instant defer></script>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
+    
+    <title>Kubernetes Service External Traffic Policy and AWS ALB | Artur Komorowski blog</title>
+    <meta name="viewport" content="width=device-width,minimum-scale=1">
+    <meta name="description" content="Lead-up Let&rsquo;s say you have an oddly specific use case of running the Nginx Ingress Controller behind the AWS Application Load Balancer. Maybe you don&rsquo;t want to lose the comfort and practicality of AWS Certificate Manager, yet you long for some features only Nginx can provide (e.g. setting custom headers). It sounds odd to have yet another hop of reverse proxy, but you decided it&rsquo;s worth it.
+To not bother with configuring the AWS ALB manually you&rsquo;ve configured AWS ALB Controller.">
+    <meta name="generator" content="Hugo 0.124.1">
+    
+    
+    
+    
+      <meta name="robots" content="noindex, nofollow">
+    
+
+    
+<link rel="stylesheet" href="/ananke/css/main.min.css" >
+
+
+
+    
+
+    
+      
+
+    
+
+    
+
+    
+      <link rel="canonical" href="http://localhost:1313/posts/external-traffic-polic-and-aws-alb/">
+    
+
+    <meta property="og:title" content="Kubernetes Service External Traffic Policy and AWS ALB" />
+<meta property="og:description" content="Lead-up Let&rsquo;s say you have an oddly specific use case of running the Nginx Ingress Controller behind the AWS Application Load Balancer. Maybe you don&rsquo;t want to lose the comfort and practicality of AWS Certificate Manager, yet you long for some features only Nginx can provide (e.g. setting custom headers). It sounds odd to have yet another hop of reverse proxy, but you decided it&rsquo;s worth it.
+To not bother with configuring the AWS ALB manually you&rsquo;ve configured AWS ALB Controller." />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="http://localhost:1313/posts/external-traffic-polic-and-aws-alb/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2024-04-11T16:09:02+02:00" />
+<meta property="article:modified_time" content="2024-04-11T16:09:02+02:00" />
+<meta itemprop="name" content="Kubernetes Service External Traffic Policy and AWS ALB">
+<meta itemprop="description" content="Lead-up Let&rsquo;s say you have an oddly specific use case of running the Nginx Ingress Controller behind the AWS Application Load Balancer. Maybe you don&rsquo;t want to lose the comfort and practicality of AWS Certificate Manager, yet you long for some features only Nginx can provide (e.g. setting custom headers). It sounds odd to have yet another hop of reverse proxy, but you decided it&rsquo;s worth it.
+To not bother with configuring the AWS ALB manually you&rsquo;ve configured AWS ALB Controller."><meta itemprop="datePublished" content="2024-04-11T16:09:02+02:00" />
+<meta itemprop="dateModified" content="2024-04-11T16:09:02+02:00" />
+<meta itemprop="wordCount" content="510">
+<meta itemprop="keywords" content="" /><meta name="twitter:card" content="summary"/><meta name="twitter:title" content="Kubernetes Service External Traffic Policy and AWS ALB"/>
+<meta name="twitter:description" content="Lead-up Let&rsquo;s say you have an oddly specific use case of running the Nginx Ingress Controller behind the AWS Application Load Balancer. Maybe you don&rsquo;t want to lose the comfort and practicality of AWS Certificate Manager, yet you long for some features only Nginx can provide (e.g. setting custom headers). It sounds odd to have yet another hop of reverse proxy, but you decided it&rsquo;s worth it.
+To not bother with configuring the AWS ALB manually you&rsquo;ve configured AWS ALB Controller."/>
+
+	
+  </head>
+
+  <body class="ma0 avenir bg-near-white">
+
+    
+   
+  
+
+  <header>
+    <div class="bg-black">
+      <nav class="pv3 ph3 ph4-ns" role="navigation">
+  <div class="flex-l justify-between items-center center">
+    <a href="/" class="f3 fw2 hover-white no-underline white-90 dib">
+      
+        Artur Komorowski blog
+      
+    </a>
+    <div class="flex-l items-center">
+      
+
+      
+      
+<div class="ananke-socials">
+  
+    
+    <a href="https://github.com/aokomorowski" target="_blank" rel="noopener" class="github ananke-social-link link-transition stackoverflow link dib z-999 pt3 pt0-l mr1" title="GitHub Account link" aria-label="follow on GitHub Account——Opens in a new window">
+      
+        <span class="icon"><svg style="enable-background:new 0 0 512 512;" version="1.1" viewBox="0 0 512 512"  xml:space="preserve" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" >
+  <path d="M256,32C132.3,32,32,134.8,32,261.7c0,101.5,64.2,187.5,153.2,217.9c11.2,2.1,15.3-5,15.3-11.1   c0-5.5-0.2-19.9-0.3-39.1c-62.3,13.9-75.5-30.8-75.5-30.8c-10.2-26.5-24.9-33.6-24.9-33.6c-20.3-14.3,1.5-14,1.5-14   c22.5,1.6,34.3,23.7,34.3,23.7c20,35.1,52.4,25,65.2,19.1c2-14.8,7.8-25,14.2-30.7c-49.7-5.8-102-25.5-102-113.5   c0-25.1,8.7-45.6,23-61.6c-2.3-5.8-10-29.2,2.2-60.8c0,0,18.8-6.2,61.6,23.5c17.9-5.1,37-7.6,56.1-7.7c19,0.1,38.2,2.6,56.1,7.7   c42.8-29.7,61.5-23.5,61.5-23.5c12.2,31.6,4.5,55,2.2,60.8c14.3,16.1,23,36.6,23,61.6c0,88.2-52.4,107.6-102.3,113.3   c8,7.1,15.2,21.1,15.2,42.5c0,30.7-0.3,55.5-0.3,63c0,6.1,4,13.3,15.4,11C415.9,449.1,480,363.1,480,261.7   C480,134.8,379.7,32,256,32z"/>
+</svg>
+</span>
+      
+<span class="new-window"><svg  height="8px"  style="enable-background:new 0 0 1000 1000;" version="1.1" viewBox="0 0 1000 1000"  xml:space="preserve" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" >
+<path d="M598 128h298v298h-86v-152l-418 418-60-60 418-418h-152v-86zM810 810v-298h86v298c0 46-40 86-86 86h-596c-48 0-86-40-86-86v-596c0-46 38-86 86-86h298v86h-298v596h596z" style="fill-rule:evenodd;clip-rule:evenodd;"/>
+</svg>
+</span></a>
+  
+</div>
+
+    </div>
+  </div>
+</nav>
+
+    </div>
+  </header>
+
+
+
+    <main class="pb7" role="main">
+      
+  
+  <article class="flex-l flex-wrap justify-between mw8 center ph3">
+    <header class="mt4 w-100">
+      <aside class="instapaper_ignoref b helvetica tracked ttu">
+          
+        Posts
+      </aside>
+      
+
+
+
+
+
+
+
+
+
+
+  <div id="sharing" class="mt3 ananke-socials">
+    
+  </div>
+
+
+      <h1 class="f1 athelas mt3 mb1">Kubernetes Service External Traffic Policy and AWS ALB</h1>
+      
+      
+      
+      <time class="f6 mv4 dib tracked" datetime="2024-04-11T16:09:02+02:00">April 11, 2024</time>
+      
+
+      
+      
+    </header>
+    <div class="nested-copy-line-height lh-copy serif f4 nested-links mid-gray pr4-l w-two-thirds-l"><h2 id="lead-up">Lead-up</h2>
+<p>Let&rsquo;s say you have an oddly specific use case of running <a href="https://github.com/nginxinc/kubernetes-ingress">the Nginx Ingress Controller</a> behind the AWS Application Load Balancer. Maybe you don&rsquo;t want to lose the comfort and practicality of AWS Certificate Manager, yet you long for some features only Nginx can provide (e.g. setting custom headers). It sounds odd to have yet another hop of reverse proxy, but you decided it&rsquo;s worth it.</p>
+<p>To not bother with configuring the AWS ALB manually you&rsquo;ve configured <a href="https://kubernetes-sigs.github.io/aws-load-balancer-controller/v2.7/">AWS ALB Controller</a>. You&rsquo;ve used the official Nginx chart to deploy the Nginx along with necessary resources. You&rsquo;ve decided 3 pods will be just right. You read the documentation of ALB Controller, Service Type must be set to NodePort for configuration between ALB and EKS nodes. You&rsquo;ve configured the Ingress resource just like that.</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-yaml" data-lang="yaml"><span style="display:flex;"><span><span style="color:#f92672">apiVersion</span>: <span style="color:#ae81ff">networking.k8s.io/v1</span>
+</span></span><span style="display:flex;"><span><span style="color:#f92672">kind</span>: <span style="color:#ae81ff">Ingress</span>
+</span></span><span style="display:flex;"><span><span style="color:#f92672">metadata</span>:
+</span></span><span style="display:flex;"><span>  <span style="color:#f92672">name</span>: <span style="color:#ae81ff">nginx-ingress-controller</span>
+</span></span><span style="display:flex;"><span>  <span style="color:#f92672">namespace</span>: <span style="color:#ae81ff">nginx</span>
+</span></span><span style="display:flex;"><span>  <span style="color:#f92672">annotations</span>:
+</span></span><span style="display:flex;"><span>    <span style="color:#f92672">alb.ingress.kubernetes.io/healthcheck-path</span>: <span style="color:#ae81ff">/nginx-health</span>
+</span></span><span style="display:flex;"><span>    <span style="color:#f92672">alb.ingress.kubernetes.io/ip-address-type</span>: <span style="color:#ae81ff">ipv4</span>
+</span></span><span style="display:flex;"><span>    <span style="color:#f92672">alb.ingress.kubernetes.io/listen-ports</span>: <span style="color:#e6db74">&#39;[{&#34;HTTP&#34;: 80}, {&#34;HTTPS&#34;: 443}]&#39;</span>
+</span></span><span style="display:flex;"><span>    <span style="color:#f92672">alb.ingress.kubernetes.io/load-balancer-name</span>: <span style="color:#ae81ff">nginx</span>
+</span></span><span style="display:flex;"><span>    <span style="color:#f92672">alb.ingress.kubernetes.io/scheme</span>: <span style="color:#ae81ff">internet-facing</span>
+</span></span><span style="display:flex;"><span>    <span style="color:#f92672">alb.ingress.kubernetes.io/ssl-redirect</span>: <span style="color:#e6db74">&#39;443&#39;</span>
+</span></span><span style="display:flex;"><span><span style="color:#f92672">spec</span>:
+</span></span><span style="display:flex;"><span>  <span style="color:#f92672">ingressClassName</span>: <span style="color:#ae81ff">alb</span>
+</span></span><span style="display:flex;"><span>  <span style="color:#f92672">rules</span>:
+</span></span><span style="display:flex;"><span>    - <span style="color:#f92672">http</span>:
+</span></span><span style="display:flex;"><span>        <span style="color:#f92672">paths</span>:
+</span></span><span style="display:flex;"><span>          - <span style="color:#f92672">path</span>: <span style="color:#ae81ff">/</span>
+</span></span><span style="display:flex;"><span>            <span style="color:#f92672">pathType</span>: <span style="color:#ae81ff">Prefix</span>
+</span></span><span style="display:flex;"><span>            <span style="color:#f92672">backend</span>:
+</span></span><span style="display:flex;"><span>              <span style="color:#f92672">service</span>:
+</span></span><span style="display:flex;"><span>                <span style="color:#f92672">name</span>: <span style="color:#ae81ff">nginx-nginx-ingress-controller</span>
+</span></span><span style="display:flex;"><span>                <span style="color:#f92672">port</span>:
+</span></span><span style="display:flex;"><span>                  <span style="color:#f92672">number</span>: <span style="color:#ae81ff">80</span>
+</span></span></code></pre></div><p>It exposes the service:</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-yaml" data-lang="yaml"><span style="display:flex;"><span><span style="color:#f92672">apiVersion</span>: <span style="color:#ae81ff">v1</span>
+</span></span><span style="display:flex;"><span><span style="color:#f92672">kind</span>: <span style="color:#ae81ff">Service</span>
+</span></span><span style="display:flex;"><span><span style="color:#f92672">metadata</span>:
+</span></span><span style="display:flex;"><span>  <span style="color:#f92672">name</span>: <span style="color:#ae81ff">nginx-nginx-ingress-controller</span>
+</span></span><span style="display:flex;"><span>  <span style="color:#f92672">namespace</span>: <span style="color:#ae81ff">nginx</span>
+</span></span><span style="display:flex;"><span><span style="color:#f92672">spec</span>:
+</span></span><span style="display:flex;"><span>  <span style="color:#f92672">ports</span>:
+</span></span><span style="display:flex;"><span>    - <span style="color:#f92672">name</span>: <span style="color:#ae81ff">http</span>
+</span></span><span style="display:flex;"><span>      <span style="color:#f92672">protocol</span>: <span style="color:#ae81ff">TCP</span>
+</span></span><span style="display:flex;"><span>      <span style="color:#f92672">port</span>: <span style="color:#ae81ff">80</span>
+</span></span><span style="display:flex;"><span>      <span style="color:#f92672">targetPort</span>: <span style="color:#ae81ff">80</span>
+</span></span><span style="display:flex;"><span>      <span style="color:#f92672">nodePort</span>: <span style="color:#ae81ff">30851</span>
+</span></span><span style="display:flex;"><span>    - <span style="color:#f92672">name</span>: <span style="color:#ae81ff">https</span>
+</span></span><span style="display:flex;"><span>      <span style="color:#f92672">protocol</span>: <span style="color:#ae81ff">TCP</span>
+</span></span><span style="display:flex;"><span>      <span style="color:#f92672">port</span>: <span style="color:#ae81ff">443</span>
+</span></span><span style="display:flex;"><span>      <span style="color:#f92672">targetPort</span>: <span style="color:#ae81ff">443</span>
+</span></span><span style="display:flex;"><span>      <span style="color:#f92672">nodePort</span>: <span style="color:#ae81ff">32350</span>
+</span></span><span style="display:flex;"><span>  <span style="color:#f92672">selector</span>:
+</span></span><span style="display:flex;"><span>    <span style="color:#f92672">app.kubernetes.io/instance</span>: <span style="color:#ae81ff">nginx</span>
+</span></span><span style="display:flex;"><span>    <span style="color:#f92672">app.kubernetes.io/name</span>: <span style="color:#ae81ff">nginx-ingress</span>
+</span></span><span style="display:flex;"><span>  <span style="color:#f92672">type</span>: <span style="color:#ae81ff">NodePort</span>
+</span></span><span style="display:flex;"><span>  <span style="color:#f92672">externalTrafficPolicy</span>: <span style="color:#ae81ff">Local</span>
+</span></span></code></pre></div><p>ALB Controller picks up the annotations from the Service resource, Load Balancer is reconciled, up &amp; running. But what&rsquo;s that? Some nodes are not passing a healthcheck. A quick check reveals these are the ones that are not running any of Nginx pods with error saying that the <code>Request timed out</code>. Why is that?</p>
+<h2 id="debugging">Debugging</h2>
+<p>You debug the thing. You SSH into one of the nodes which are not passing the healthcheck. You do the thing:</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-shell" data-lang="shell"><span style="display:flex;"><span>curl -I localhost:30851
+</span></span></code></pre></div><p>And you get the response. You double-check - Nginx is not running on this node. The traffic is local, you&rsquo;re using a loopback interface. Then why ALB can&rsquo;t reach it?</p>
+<h2 id="root-cause">Root cause</h2>
+<p>Well, the problem sits in the chair. You&rsquo;ve copy-pasted some bollocks from the internet without understanding what does it mean.</p>
+<p>You see, when you put the <code>.spec.externalTrafficPolicy = 'Local'</code> in your Service definition, you ordered kubeProxy to handle all the traffic originating outside of the cluster by the node that received that traffic, omitting completely the Service abstraction.</p>
+<p>What does it mean in practice is if your node doesn&rsquo;t run the pod which is registered as an endpoint in the Service it will drop (not reject) the connection, which will result in timeout.</p>
+<p>But why it doesn&rsquo;t happen when testing it from a node? Because it&rsquo;s not considered an external traffic, hence if you&rsquo;d like to mimic the same behaviour within a cluster you&rsquo;d need to specify <code>.spec.internalTrafficPolicy = 'Local'</code>. Both fields default to <code>'Cluster'</code>.</p>
+<h2 id="tldr">Tl;dr</h2>
+<p>If some of your nodes are not passing healtchecks for NodePort services remove <code>.spec.externalTrafficPolicy = 'Local'</code>.</p>
+<h2 id="references">References</h2>
+<ul>
+<li><a href="https://kubernetes.io/docs/concepts/services-networking/service-traffic-policy/">Kubernetes docs on Traffic Policies</a></li>
+<li><a href="https://kubernetes.io/docs/tasks/access-application-cluster/create-external-load-balancer/#preserving-the-client-source-ip">Kubernetes docs on handling external traffic</a></li>
+<li><a href="https://kubernetes.io/docs/concepts/services-networking/service/#type-nodeport">Kubernetes docs on Service NodePort type</a></li>
+<li><a href="https://github.com/kubernetes/kubernetes/blob/be4b7176dc131ea842cab6882cd4a06dbfeed12a/pkg/proxy/nftables/proxier.go#L1178">Piece of code responsible for described behaviour</a></li>
+</ul>
+<ul class="pa0">
+  
+</ul>
+<div class="mt6 instapaper_ignoref">
+      
+      
+      </div>
+    </div>
+
+    <aside class="w-30-l mt6-l"><div class="bg-light-gray pa3 nested-list-reset nested-copy-line-height nested-links">
+    <p class="f5 b mb3">What&#39;s in this posts</p>
+      <nav id="TableOfContents">
+  <ul>
+    <li><a href="#lead-up">Lead-up</a></li>
+    <li><a href="#debugging">Debugging</a></li>
+    <li><a href="#root-cause">Root cause</a></li>
+    <li><a href="#tldr">Tl;dr</a></li>
+    <li><a href="#references">References</a></li>
+  </ul>
+</nav>
+  </div>
+
+
+
+
+</aside>
+
+  </article>
+
+    </main>
+    <footer class="bg-black bottom-0 w-100 pa3" role="contentinfo">
+  <div class="flex justify-between">
+  <a class="f4 fw4 hover-white no-underline white-70 dn dib-ns pv2 ph3" href="http://localhost:1313/" >
+    &copy;  Artur Komorowski blog 2024 
+  </a>
+    <div>
+<div class="ananke-socials">
+  
+    
+    <a href="https://github.com/aokomorowski" target="_blank" rel="noopener" class="github ananke-social-link link-transition stackoverflow link dib z-999 pt3 pt0-l mr1" title="GitHub Account link" aria-label="follow on GitHub Account——Opens in a new window">
+      
+        <span class="icon"><svg style="enable-background:new 0 0 512 512;" version="1.1" viewBox="0 0 512 512"  xml:space="preserve" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" >
+  <path d="M256,32C132.3,32,32,134.8,32,261.7c0,101.5,64.2,187.5,153.2,217.9c11.2,2.1,15.3-5,15.3-11.1   c0-5.5-0.2-19.9-0.3-39.1c-62.3,13.9-75.5-30.8-75.5-30.8c-10.2-26.5-24.9-33.6-24.9-33.6c-20.3-14.3,1.5-14,1.5-14   c22.5,1.6,34.3,23.7,34.3,23.7c20,35.1,52.4,25,65.2,19.1c2-14.8,7.8-25,14.2-30.7c-49.7-5.8-102-25.5-102-113.5   c0-25.1,8.7-45.6,23-61.6c-2.3-5.8-10-29.2,2.2-60.8c0,0,18.8-6.2,61.6,23.5c17.9-5.1,37-7.6,56.1-7.7c19,0.1,38.2,2.6,56.1,7.7   c42.8-29.7,61.5-23.5,61.5-23.5c12.2,31.6,4.5,55,2.2,60.8c14.3,16.1,23,36.6,23,61.6c0,88.2-52.4,107.6-102.3,113.3   c8,7.1,15.2,21.1,15.2,42.5c0,30.7-0.3,55.5-0.3,63c0,6.1,4,13.3,15.4,11C415.9,449.1,480,363.1,480,261.7   C480,134.8,379.7,32,256,32z"/>
+</svg>
+</span>
+      
+<span class="new-window"><svg  height="8px"  style="enable-background:new 0 0 1000 1000;" version="1.1" viewBox="0 0 1000 1000"  xml:space="preserve" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" >
+<path d="M598 128h298v298h-86v-152l-418 418-60-60 418-418h-152v-86zM810 810v-298h86v298c0 46-40 86-86 86h-596c-48 0-86-40-86-86v-596c0-46 38-86 86-86h298v86h-298v596h596z" style="fill-rule:evenodd;clip-rule:evenodd;"/>
+</svg>
+</span></a>
+  
+</div>
+</div>
+  </div>
+</footer>
+
+  </body>
+</html>

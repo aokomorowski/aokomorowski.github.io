@@ -1,0 +1,12 @@
+baseURL = 'https://aokomorowski.github.io/'
+languageCode = 'en-us'
+title = 'Artur Komorowski blog'
+theme = 'ananke'
+[params]
+  [params.contact]
+    github = '@aokomorowski'
+  [[params.ananke_socials]]
+    name = "github"
+    url = "https://github.com/aokomorowski"
+    label = "GitHub Account"
+    color = "#ff6800"

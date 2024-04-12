@@ -10,3 +10,6 @@ theme = 'ananke'
     url = "https://github.com/aokomorowski"
     label = "GitHub Account"
     color = "#ff6800"
+[services]
+  [services.googleAnalytics]
+    ID = "G-5NSX9EH5C9"

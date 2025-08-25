@@ -62,5 +62,5 @@ Within the loop we've `inotifyd` listening for the events for the node descripto
 
 The configuration is finished with setting a `shareProcessNamespace` to `true` so both the application container and the sidecar container work in the same process namespace (as the name would indicate). Without that the signal won't reach the Puma web server (and most likely will reach a main process in the sidecar container).
 
-And that's it. Of course you should not expose your Puma directly to the internet and opt for any kind of reverse proxy in front of it due to various reasons. Alternatively you can use something [thruster](https://github.com/basecamp/thruster) which might make this article completely irrelevant to you, but I'm glad that you'r reading this anyway.
+And that's it. Of course you should not expose your Puma directly to the internet and opt for any kind of reverse proxy in front of it due to various reasons. Alternatively you can use something [thruster](https://github.com/basecamp/thruster) which might make this article completely irrelevant to you, but I'm glad that you're reading this anyway.
  

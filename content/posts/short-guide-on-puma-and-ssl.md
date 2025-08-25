@@ -26,7 +26,7 @@ I'll leave the question of how to get a valid certificate and how to trust it as
 
 ## Reloading the certificates without downtime
 
-Bringing the entire application down just because you updated the certificate file doesn't sound like a funny job. Luckily for us, Puma reacts to UNIX signals other than `SIGKILL`. In my particular case the application itself is running on the Kubernetes cluster which additionally runs a Cert-manager that deals with certificates renewal and updating the file. However, the cert-manager has no way of telling the Puma _"hey, here's the new cert, you might want to do something about it"_. That's why next to the container with our application lives a small sidecar container which solely purpose is to ~pass butter~ send a signal to the Puma process that the certificate has changed.
+Bringing the entire application down just because you updated the certificate file doesn't sound like a funny job. Luckily for us, Puma reacts to UNIX signals other than `SIGKILL`. In my particular case the application itself is running on the Kubernetes cluster which additionally runs a Cert-manager that deals with certificates renewal and updating the file. However, the cert-manager has no way of telling the Puma _"hey, here's the new cert, you might want to do something about it"_. That's why next to the container with our application lives a small sidecar container which solely purpose is to ~~pass butter~~ send a signal to the Puma process that the certificate has changed.
 
 Here's how we did:
 ```yaml

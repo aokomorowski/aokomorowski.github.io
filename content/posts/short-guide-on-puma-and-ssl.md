@@ -1,100 +1,62 @@
 +++
-title = 'Kubernetes Service External Traffic Policy and AWS ALB'
-date = 2024-04-11T16:09:02+02:00
+title = 'A short guide for TLS with Puma Web Server'
+date = 2025-08-25T16:09:02+02:00
 draft = false
 toc = true
 
 +++
 
-## Lead-up
+This is a kind of article that gets shredded by the big industry machine of LLM & AI to spit the answer right into your code editor with no regard to the source. I'm glad I can participate in that.
 
-Let's say you have an oddly specific use case of running [the Nginx Ingress Controller](https://github.com/nginxinc/kubernetes-ingress) behind the AWS Application Load Balancer. Maybe you don't want to lose the comfort and practicality of AWS Certificate Manager, yet you long for some features only Nginx can provide (e.g. setting custom headers). It sounds odd to have yet another hop of reverse proxy, but you decided it's worth it.
+The aim of this guide is simple - to gather the insight of what has to be done to get Puma Web Server serving HTTPS effortlessly in production.
 
-To not bother with configuring the AWS ALB manually you've configured [AWS ALB Controller](https://kubernetes-sigs.github.io/aws-load-balancer-controller/v2.7/). You've used the official Nginx chart to deploy the Nginx along with necessary resources. You've decided 3 pods will be just right. You read the documentation of ALB Controller, Service Type must be set to NodePort for configuration between ALB and EKS nodes. You've configured the Ingress resource just like that.
+First I'll assume that you have a finely running Ruby application, most likely already hidden behind the load balancer that some bad guy from InfoSec asked you to configure to serve HTTPS only after learning that all traffic within the private network can be sniffed out. Let's prepare the application for that.
 
+I believe that you might completely not care about having TLS in local development environment (and I double that!). Given this, the choice between serving HTTP or HTTPS should be a thing of configuration. In Puma such behaviour is set by passing a configuration string to `rails s` command:
+
+```
+rails s -b 'ssl://0.0.0.0:3443?key=/app/tls/tls.key&cert=/app/tls/tls.crt'
+```
+
+Let's stop here for a second and break down the value for `--bind` parameter. It's format is very similar to the URL. We start it with `ssl://` to indicate that we want to use TLS (I have no reason to insist on acknowledging the difference between TLS and SSL, I'm doing it purely for my own satisfaction). It is followed by the IP address `0.0.0.0` meaning _"listen on all interfaces"_. Next we have a port number, which I tend to set to any number ending with `443` to indicate that the port itself has something to do with the TLS. Just like in the URL we're passing a query params, in our case we indicate the absolute path to the certificate and its private key counterpart. Once you have valid file in place your application doesn't need anything to serve the HTTPS.
+
+## Getting certificates?
+
+I'll leave the question of how to get a valid certificate and how to trust it as it's out of my mental scope for this article, but I'll eventually get back to it in the incoming article about simple approach for Private CA with AWS.
+
+## Reloading the certificates without downtime
+
+Bringing the entire application down just because you updated the certificate file doesn't sound like a funny job. Luckily for us, Puma reacts to UNIX signals other than `SIGKILL`. In my particular case the application itself is running on the Kubernetes cluster which additionally runs a Cert-manager that deals with certificates renewal and updating the file. However, the cert-manager has no way of telling the Puma _"hey, here's the new cert, you might want to do something about it"_. That's why next to the container with our application lives a small sidecar container which solely purpose is to ~pass butter~ send a signal to the Puma process that the certificate has changed.
+
+Here's how we did:
 ```yaml
-apiVersion: networking.k8s.io/v1
-kind: Ingress
-metadata:
-  name: nginx-ingress-controller
-  namespace: nginx
-  annotations:
-    alb.ingress.kubernetes.io/healthcheck-path: /nginx-health
-    alb.ingress.kubernetes.io/ip-address-type: ipv4
-    alb.ingress.kubernetes.io/listen-ports: '[{"HTTP": 80}, {"HTTPS": 443}]'
-    alb.ingress.kubernetes.io/load-balancer-name: nginx
-    alb.ingress.kubernetes.io/scheme: internet-facing
-    alb.ingress.kubernetes.io/ssl-redirect: '443'
-spec:
-  ingressClassName: alb
-  rules:
-    - http:
-        paths:
-          - path: /
-            pathType: Prefix
-            backend:
-              service:
-                name: nginx-nginx-ingress-controller
-                port:
-                  number: 80
+sidecarContainers:
+  - name: certificate-change-monitor
+    image: alpine:latest
+    command:
+      - /bin/sh
+      - -c
+      - |
+        echo "Monitoring /app/tls/tls.crt for changes..."
+        while true; do
+          if inotifyd true /app/tls/tls.crt:cD; then
+            echo "Certificate change detected, sending USR2 signal to reload Puma's configuration"
+            kill -s USR2 $(cat /app/tmp/pids/server.pid)
+            echo "Signal sent"
+          fi
+          sleep 1
+        done
+    volumeMounts:
+      - name: tls-cert
+        mountPath: "/app/tls"
+        readOnly: true
+      - name: app-temp-storage
+        mountPath: /app/tmp
+        readOnly: true
+shareProcessNamespace: true
 ```
 
-It exposes the service:
+Let's break it down. It's a YAML file, a snippet cut out of our values.yaml file. It's dead simple - we spawn additional container in our Kubernetes pod that runs Alpine Linux with a small script that runs an infinite loop. Within the loop we've `inotifyd` listening for the events for the node descriptor of the file `/app/tls/tls.crt` conviently mounted from the shared volume used by the application. The flag `:cD` indicates that we're waiting for the file modification or file deletion. Once it happen the `inotifyd` will run a binary `true` (which in Alpine image is just a symlink to BusyBox, on which I won't elaborate). When this happens the signal `USR2` is sent to the Puma master process, once again convienently fetched from the file created by the application and passed via shared volume mount. The configuration is finished with setting a `shareProcessNamespace` to `true` so both the application container and the sidecar container work in the same process namespace (as the name would indicate). Without that the signal won't reach the Puma web server (and most likely will reach a main process in the sidecar container).
 
-```yaml
-apiVersion: v1
-kind: Service
-metadata:
-  name: nginx-nginx-ingress-controller
-  namespace: nginx
-spec:
-  ports:
-    - name: http
-      protocol: TCP
-      port: 80
-      targetPort: 80
-      nodePort: 30851
-    - name: https
-      protocol: TCP
-      port: 443
-      targetPort: 443
-      nodePort: 32350
-  selector:
-    app.kubernetes.io/instance: nginx
-    app.kubernetes.io/name: nginx-ingress
-  type: NodePort
-  externalTrafficPolicy: Local
-```
-
-ALB Controller picks up the annotations from the Service resource, Load Balancer is reconciled, up & running. But what's that? Some nodes are not passing a healthcheck. A quick check reveals these are the ones that are not running any of Nginx pods with error saying that the `Request timed out`. Why is that? 
-
-
-## Debugging 
-
-You debug the thing. You SSH into one of the nodes which are not passing the healthcheck. You do the thing:
-```shell
-curl -I localhost:30851
-```
-
-And you get the response. You double-check - Nginx is not running on this node. The traffic is local, you're using a loopback interface. Then why ALB can't reach it?
-
-## Root cause
-
-Well, the problem sits in the chair. You've copy-pasted some bollocks from the internet without understanding what does it mean.
-
-You see, when you put the `.spec.externalTrafficPolicy = 'Local'` in your Service definition, you ordered kubeProxy to handle all the traffic originating outside of the cluster by the node that received that traffic, omitting completely the Service abstraction.
-
-What does it mean in practice is if your node doesn't run the pod which is registered as an endpoint in the Service it will drop (not reject) the connection, which will result in timeout.
-
-But why it doesn't happen when testing it from a node? Because it's not considered an external traffic, hence if you'd like to mimic the same behaviour within a cluster you'd need to specify `.spec.internalTrafficPolicy = 'Local'`. Both fields default to `'Cluster'`. 
-
-## Tl;dr
-
-If some of your nodes are not passing healtchecks for NodePort services remove `.spec.externalTrafficPolicy = 'Local'`.
-
-## References
-
-- [Kubernetes docs on Traffic Policies](https://kubernetes.io/docs/concepts/services-networking/service-traffic-policy/)
-- [Kubernetes docs on handling external traffic](https://kubernetes.io/docs/tasks/access-application-cluster/create-external-load-balancer/#preserving-the-client-source-ip)
-- [Kubernetes docs on Service NodePort type](https://kubernetes.io/docs/concepts/services-networking/service/#type-nodeport)
-- [Piece of code responsible for described behaviour](https://github.com/kubernetes/kubernetes/blob/be4b7176dc131ea842cab6882cd4a06dbfeed12a/pkg/proxy/nftables/proxier.go#L1178)
+And that's it. Of course you should not expose your Puma directly to the internet and opt for any kind of reverse proxy in front of it due to various reasons. Alternatively you can use something [thruster](https://github.com/basecamp/thruster) which might make this article completely irrelevant to you, but I'm glad that you'r reading this anyway.
+- 
